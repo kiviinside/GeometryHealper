@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор чертежей</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <h1>Генератор чертежей для пространственных задач</h1>
+    <div id="inputSection">
+        <label for="description">Опишите геометрическую задачу:</label><br>
+        <textarea id="description"
+            placeholder="Укажите наклон и дистанцию от фигуры. Пример: «Прямой куб близко»."></textarea><br>
+        <button id="generateBtn">Сгенерировать чертеж</button>
+    </div>
+
+    <div id="resultContainer">
+        <div id="resultSection">
+            <div id="loadingSpinner">Генерация чертежа... (это может занять несколько секунд)</div>
+            <img id="outputImage" />
+            <div id="errorMessage"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const description = document.getElementById('description').value.trim();
+            const generateBtn = document.getElementById('generateBtn');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const outputImage = document.getElementById('outputImage');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Сброс предыдущих результатов
+            outputImage.style.display = 'none';
+            errorMessage.style.display = 'none';
+
+            if (!description) {
+                errorMessage.textContent = 'Пожалуйста, введите описание задачи.';
+                errorMessage.style.display = 'block';
+                return;
+            }
+
+            // Показываем индикатор загрузки
+            generateBtn.disabled = true;
+            loadingSpinner.style.display = 'block';
+
+            try {
+                // Отправляем запрос на backend
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ description: description }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Ошибка сервера: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Отображаем сгенерированное изображение
+                    outputImage.src = data.image_url; // URL к сгенерированному изображению
+                    outputImage.style.display = 'block';
+                } else {
+                    throw new Error(data.error || 'Неизвестная ошибка');
+                }
+
+            } catch (error) {
+                errorMessage.textContent = `Ошибка: ${error.message}`;
+                errorMessage.style.display = 'block';
+            } finally {
+                // Скрываем индикатор загрузки
+                generateBtn.disabled = false;
+                loadingSpinner.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>
