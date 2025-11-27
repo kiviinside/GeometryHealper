@@ -34,13 +34,22 @@ class GeometryDataset(Dataset):
         data = []
         for fig_type, descs in descriptions_by_type.items():
             for desc in descs:
-                # Прямое положение
-                data.append([f"{desc}", fig_type, 1.8, 1.0, 2.0, 0, 0, 3.0, 1.5, 0, 4 if fig_type in [1,2] else 0])
-                # Наклон
-                data.append([f"{desc} наклонённый", fig_type, 1.8, 1.0, 2.0, 30, -20, 3.0, 1.5, 0, 4 if fig_type in [1,2] else 0])
-                # Большой/маленький
-                data.append([f"большой {desc}", fig_type, 2.5, 1.5, 2.8, 0, 0, 4.0, 1.8, 0, 4 if fig_type in [1,2] else 0])
-                data.append([f"маленький {desc}", fig_type, 1.2, 0.7, 1.5, 0, 0, 2.5, 1.2, 0, 4 if fig_type in [1,2] else 0])
+                if fig_type in [1, 2]:  # пирамида или призма
+                    for sides in [3, 4, 5, 6, 8]:
+                        # Прямая фигура
+                        data.append([f"{desc} с {sides} гранями", fig_type, 1.8, 1.0, 2.0, 0, 0, 3.0, 1.5, 0, sides])
+                        # Наклонённая
+                        data.append([f"наклонённая {desc} с {sides} сторонами", fig_type, 1.8, 1.0, 2.0, 30, -20, 3.0, 1.5, 0, sides])
+                        # Большая
+                        data.append([f"большая {desc} с {sides} гранями", fig_type, 2.5, 1.5, 2.8, 0, 0, 4.0, 1.8, 0, sides])
+                        # Маленькая
+                        data.append([f"маленькая {desc} с {sides} сторонами", fig_type, 1.2, 0.7, 1.5, 0, 0, 2.5, 1.2, 0, sides])
+                else:
+                    # Для остальных фигур (куб, шар, цилиндр, конус) — num_sides не используется (ставим 0)
+                    data.append([f"{desc}", fig_type, 1.8, 1.0, 2.0, 0, 0, 3.0, 1.5, 0, 0])
+                    data.append([f"{desc} наклонённый", fig_type, 1.8, 1.0, 2.0, 30, -20, 3.0, 1.5, 0, 0])
+                    data.append([f"большой {desc}", fig_type, 2.5, 1.5, 2.8, 0, 0, 4.0, 1.8, 0, 0])
+                    data.append([f"маленький {desc}", fig_type, 1.2, 0.7, 1.5, 0, 0, 2.5, 1.2, 0, 0])
 
         # Преобразуем в словари
         result = []

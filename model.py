@@ -18,7 +18,6 @@ FIGURE_TYPES = {
 }
 NUM_FIGURE_TYPES = len(FIGURE_TYPES)  # = 6
 
-
 class ImprovedSceneRenderer:
     """
     Реалистичный рендерер 3D фигур с использованием matplotlib
@@ -26,7 +25,7 @@ class ImprovedSceneRenderer:
     
     def __init__(self, output_size=(256, 256)):
         self.output_size = output_size
-        
+
     def create_cube(self, size=1.0):
         """Создает вершины куба"""
         vertices = np.array([
@@ -40,7 +39,7 @@ class ImprovedSceneRenderer:
         ]
         return vertices, edges
     
-    def create_sphere(self, radius=1.0, resolution=20):
+    def create_sphere(self, radius=1.0, resolution=10):
         """Создает сферу с правильной размерностью"""
         phi = np.linspace(0, np.pi, resolution)
         theta = np.linspace(0, 2*np.pi, resolution)
@@ -52,7 +51,7 @@ class ImprovedSceneRenderer:
         
         return x, y, z
 
-    def create_cylinder(self, radius=1.0, height=2.0, resolution=20):
+    def create_cylinder(self, radius=1.0, height=2.0, resolution=10):
         """Создает цилиндр с правильной размерностью"""
         z = np.linspace(-height/2, height/2, resolution)
         theta = np.linspace(0, 2*np.pi, resolution)
@@ -64,7 +63,7 @@ class ImprovedSceneRenderer:
         
         return x, y, z
 
-    def create_cone(self, radius=1.0, height=2.0, resolution=20):
+    def create_cone(self, radius=1.0, height=2.0, resolution=10):
         """Создает конус с правильной размерностью"""
         z = np.linspace(0, height, resolution)
         theta = np.linspace(0, 2*np.pi, resolution)
@@ -149,171 +148,21 @@ class ImprovedSceneRenderer:
         
         R = Ry @ Rx
         return vertices @ R.T
-    
-    def render_from_params(self, params):
-        """
-        Рендерит реальные 3D фигуры на основе параметров
-        """
-        batch_size = params.shape[0]
-        images = []
-        
-        for i in range(batch_size):
-            # Используем агрессивный backend для matplotlib
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            
-            fig = plt.figure(figsize=(2.56, 2.56), dpi=100, facecolor='white')
-            ax = fig.add_subplot(111, projection='3d')
-            
-            # Извлекаем параметры
-            figure_type = int(params[i, 0].item())
-            scale = params[i, 1].item()
-            radius = params[i, 2].item()
-            height = params[i, 3].item()
-            rot_x = params[i, 4].item()
-            rot_y = params[i, 5].item()
-            cam_dist = params[i, 6].item()
-            line_thickness = params[i, 7].item()
-            is_dashed = params[i, 8].item() > 0.5
-            num_sides = max(3, int(params[i, 9].item()))
-            
-            print(f"Рендерим фигуру типа {figure_type}, scale={scale}, cam_dist={cam_dist}")
-            
-            try:
-                # Создаем простую фигуру для тестирования
-                if figure_type == 0:  # куб
-                    vertices, edges = self.create_cube(scale)
-                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
-                    
-                    for edge in edges:
-                        points = vertices[list(edge)]
-                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
-                                'black', linewidth=line_thickness)
-                        
-                elif figure_type == 1:  # пирамида
-                    vertices, edges = self.create_pyramid(scale, height, num_sides)
-                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
-                    
-                    for edge in edges:
-                        points = vertices[list(edge)]
-                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
-                                'black', linewidth=line_thickness)
 
-                elif figure_type == 2:  # призма
-                    vertices, edges = self.create_prism(base_size=scale, height=height, sides=num_sides)
-                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
+    def _render_surface(self, ax, x, y, z, rot_x, rot_y, line_thickness, max_lines=8):
+        points = np.stack([x.flatten(), y.flatten(), z.flatten()], axis=1)
+        points_rot = self.apply_rotation(points, rot_x, rot_y)
+        x_rot = points_rot[:, 0].reshape(x.shape)
+        y_rot = points_rot[:, 1].reshape(y.shape)
+        z_rot = points_rot[:, 2].reshape(z.shape)
 
-                    for edge in edges:
-                        points = vertices[list(edge)]
-                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 'black', linewidth=line_thickness)
-                        
-                elif figure_type == 3:  # шар
-                    # Простая сфера - каркас
-                    u = np.linspace(0, 2 * np.pi, 12)
-                    v = np.linspace(0, np.pi, 8)
-                    x = radius * np.outer(np.cos(u), np.sin(v))
-                    y = radius * np.outer(np.sin(u), np.sin(v))
-                    z = radius * np.outer(np.ones(np.size(u)), np.cos(v))
-                    
-                    # Применяем вращение
-                    points = np.stack([x.flatten(), y.flatten(), z.flatten()], axis=1)
-                    points_rot = self.apply_rotation(points, rot_x, rot_y)
-                    x_rot = points_rot[:, 0].reshape(x.shape)
-                    y_rot = points_rot[:, 1].reshape(y.shape)
-                    z_rot = points_rot[:, 2].reshape(z.shape)
-                    
-                    # Рендерим как каркас
-                    for i in range(x_rot.shape[0]):
-                        ax.plot(x_rot[i, :], y_rot[i, :], z_rot[i, :], 'black', linewidth=line_thickness)
-                    for i in range(x_rot.shape[1]):
-                        ax.plot(x_rot[:, i], y_rot[:, i], z_rot[:, i], 'black', linewidth=line_thickness)
+        step_u = max(1, x_rot.shape[0] // max_lines)
+        step_v = max(1, x_rot.shape[1] // max_lines)
 
-                elif figure_type == 4:  # цилиндр
-                    x, y, z = self.create_cylinder(radius=radius, height=height, resolution=20)
-                    points = np.stack([x.flatten(), y.flatten(), z.flatten()], axis=1)
-                    points_rot = self.apply_rotation(points, rot_x, rot_y)
-                    x_rot = points_rot[:, 0].reshape(x.shape)
-                    y_rot = points_rot[:, 1].reshape(y.shape)
-                    z_rot = points_rot[:, 2].reshape(z.shape)
-                    for i in range(x_rot.shape[0]):
-                        ax.plot(x_rot[i, :], y_rot[i, :], z_rot[i, :], 'black', linewidth=line_thickness)
-                    for i in range(x_rot.shape[1]):
-                        ax.plot(x_rot[:, i], y_rot[:, i], z_rot[:, i], 'black', linewidth=line_thickness)
-
-                elif figure_type == 5:  # конус
-                    x, y, z = self.create_cone(radius=radius, height=height, resolution=20)
-                    points = np.stack([x.flatten(), y.flatten(), z.flatten()], axis=1)
-                    points_rot = self.apply_rotation(points, rot_x, rot_y)
-                    x_rot = points_rot[:, 0].reshape(x.shape)
-                    y_rot = points_rot[:, 1].reshape(y.shape)
-                    z_rot = points_rot[:, 2].reshape(z.shape)
-                    for i in range(x_rot.shape[0]):
-                        ax.plot(x_rot[i, :], y_rot[i, :], z_rot[i, :], 'black', linewidth=line_thickness)
-                    for i in range(x_rot.shape[1]):
-                        ax.plot(x_rot[:, i], y_rot[:, i], z_rot[:, i], 'black', linewidth=line_thickness)
-                else:  # Все остальные - простой куб
-                    vertices, edges = self.create_cube(scale)
-                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
-                    
-                    for edge in edges:
-                        points = vertices[list(edge)]
-                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
-                                'black', linewidth=line_thickness)
-                
-                # Настройки камеры
-                ax.set_xlim([-cam_dist, cam_dist])
-                ax.set_ylim([-cam_dist, cam_dist])
-                ax.set_zlim([-cam_dist, cam_dist])
-                ax.set_box_aspect([1, 1, 1])
-                
-                # Убираем оси но оставляем белый фон
-                ax.set_axis_off()
-                ax.grid(False)
-                
-                # Явно устанавливаем белый фон
-                ax.set_facecolor('white')
-                fig.patch.set_facecolor('white')
-                
-                # Убираем прозрачность
-                ax.xaxis.pane.set_facecolor('white')
-                ax.yaxis.pane.set_facecolor('white')
-                ax.zaxis.pane.set_facecolor('white')
-                ax.xaxis.pane.set_alpha(1.0)
-                ax.yaxis.pane.set_alpha(1.0)
-                ax.zaxis.pane.set_alpha(1.0)
-                
-                # Убираем границы
-                ax.xaxis.pane.set_edgecolor('white')
-                ax.yaxis.pane.set_edgecolor('white')
-                ax.zaxis.pane.set_edgecolor('white')
-                
-                # Сохраняем в тензор - ИСПРАВЛЕННЫЙ МЕТОД
-                fig.tight_layout(pad=0)
-                fig.canvas.draw()
-                
-                # Получаем изображение - НОВЫЙ СПОСОБ
-                buf = fig.canvas.buffer_rgba()
-                ncols, nrows = fig.canvas.get_width_height()
-                img_array = np.frombuffer(buf, dtype=np.uint8).reshape(nrows, ncols, 4)
-                img_array = img_array[:, :, :3]  # Убираем альфа-канал
-                img_tensor = torch.from_numpy(img_array).float() / 255.0
-                
-                print(f"Изображение создано: {img_array.shape}, диапазон: {img_array.min()}-{img_array.max()}")
-                
-                images.append(img_tensor.permute(2, 0, 1))  # [C, H, W]
-                plt.close(fig)
-                
-            except Exception as e:
-                print(f"Ошибка при рендеринге: {e}")
-                import traceback
-                traceback.print_exc()
-                # Создаем тестовое изображение с фигурой
-                fallback_img = self.create_fallback_image()
-                images.append(fallback_img)
-                plt.close(fig)
-        
-        return torch.stack(images)
+        for j in range(0, x_rot.shape[0], step_u):
+            ax.plot(x_rot[j, :], y_rot[j, :], z_rot[j, :], 'black', linewidth=line_thickness)
+        for k in range(0, x_rot.shape[1], step_v):
+            ax.plot(x_rot[:, k], y_rot[:, k], z_rot[:, k], 'black', linewidth=line_thickness)
 
     def create_fallback_image(self):
         """Создает простое тестовое изображение с кругом"""
@@ -334,6 +183,111 @@ class ImprovedSceneRenderer:
         img[2] = 1.0 - circle.float()  # Синий канал (фон)
         
         return img
+
+    def render_from_params(self, params):
+        """
+        Рендерит реальные 3D фигуры на основе параметров
+        """
+        batch_size = params.shape[0]
+        images = []
+
+        for idx in range(batch_size):
+            fig = plt.figure(figsize=(2.56, 2.56), dpi=100, facecolor='white')
+            ax = fig.add_subplot(111, projection='3d')
+            
+            # Извлекаем параметры
+            figure_type = int(params[idx, 0].item())
+            scale = params[idx, 1].item()
+            radius = params[idx, 2].item()
+            height = params[idx, 3].item()
+            rot_x = params[idx, 4].item()
+            rot_y = params[idx, 5].item()
+            cam_dist = params[idx, 6].item()
+            line_thickness = params[idx, 7].item()
+            is_dashed = params[idx, 8].item() > 0.5
+            num_sides = max(3, int(params[idx, 9].item()))
+            
+            try:
+                if figure_type == 0:  # куб
+                    vertices, edges = self.create_cube(scale)
+                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
+                    for edge in edges:
+                        points = vertices[list(edge)]
+                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
+                                'black', linewidth=line_thickness)
+                            
+                elif figure_type == 1:  # пирамида
+                    vertices, edges = self.create_pyramid(scale, height, num_sides)
+                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
+                    for edge in edges:
+                        points = vertices[list(edge)]
+                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
+                                'black', linewidth=line_thickness)
+
+                elif figure_type == 2:  # призма
+                    vertices, edges = self.create_prism(base_size=scale, height=height, sides=num_sides)
+                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
+                    for edge in edges:
+                        points = vertices[list(edge)]
+                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 'black', linewidth=line_thickness)
+                            
+
+                elif figure_type == 3:  # шар
+                    u = np.linspace(0, 2 * np.pi, 12)
+                    v = np.linspace(0, np.pi, 8)
+                    x = radius * np.outer(np.cos(u), np.sin(v))
+                    y = radius * np.outer(np.sin(u), np.sin(v))
+                    z = radius * np.outer(np.ones(np.size(u)), np.cos(v))
+                    self._render_surface(ax, x, y, z, rot_x, rot_y, line_thickness)
+
+                elif figure_type == 4:  # цилиндр
+                    x, y, z = self.create_cylinder(radius=radius, height=height, resolution=20)
+                    self._render_surface(ax, x, y, z, rot_x, rot_y, line_thickness, max_lines = 6)
+
+                elif figure_type == 5:  # конус
+                    x, y, z = self.create_cone(radius=radius, height=height, resolution=20)
+                    self._render_surface(ax, x, y, z, rot_x, rot_y, line_thickness, max_lines = 6)
+
+                else:  # fallback
+                    vertices, edges = self.create_cube(scale)
+                    vertices = self.apply_rotation(vertices, rot_x, rot_y)
+                    for edge in edges:
+                        points = vertices[list(edge)]
+                        ax.plot3D(points[:, 0], points[:, 1], points[:, 2], 
+                                'black', linewidth=line_thickness)
+                
+                # Настройки камеры
+                ax.set_xlim([-cam_dist, cam_dist])
+                ax.set_ylim([-cam_dist, cam_dist])
+                ax.set_zlim([-cam_dist, cam_dist])
+                ax.set_box_aspect([1, 1, 1])
+                ax.set_axis_off()
+                ax.grid(False)
+                ax.set_facecolor('white')
+                fig.patch.set_facecolor('white')
+                for pane in [ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane]:
+                    pane.set_facecolor('white')
+                    pane.set_alpha(1.0)
+                    pane.set_edgecolor('white')
+
+                fig.tight_layout(pad=0)
+                fig.canvas.draw()
+                
+                buf = fig.canvas.buffer_rgba()
+                ncols, nrows = fig.canvas.get_width_height()
+                img_array = np.frombuffer(buf, dtype=np.uint8).reshape(nrows, ncols, 4)[:, :, :3]
+                img_tensor = torch.from_numpy(img_array).float() / 255.0
+                images.append(img_tensor.permute(2, 0, 1))
+                plt.close(fig)
+                
+            except Exception as e:
+                print(f"Ошибка при рендеринге {idx}: {e}")
+                import traceback
+                traceback.print_exc()
+                images.append(self.create_fallback_image())
+                plt.close(fig)
+        
+        return torch.stack(images) if images else torch.zeros(1, 3, *self.output_size)
 
 class ImprovedParametricGeometryPredictor(nn.Module):
     def __init__(self, text_embed_dim=384, hidden_dim=512, num_figure_types=6, num_cont_params=9):
