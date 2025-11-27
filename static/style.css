@@ -116,11 +116,14 @@ h1 {
   display: none;
   max-width: 100%;
   height: auto;
-  border: 2px solid var(--success-border);
+  border: 3px solid #2d222f;
   border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-  background: white;
-  margin: 16px auto 0 auto; 
+  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.08);
+  background: #4b2138;
+  margin: 16px auto 0 auto;
+  min-height: 600px;
+  min-width: 600px;
+  object-fit: contain;
 }
 
 #errorMessage {
